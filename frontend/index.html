@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curify Admin Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.5);
+            overflow-y: auto;
+            z-index: 50;
+        }
+
+        .modal.active {
+            display: block;
+        }
+
+        .comparison-modal {
+            width: 95%;
+            max-width: 1400px;
+            margin: 0 auto;
+            position: relative;
+            overflow-y: auto;
+            max-height: calc(100vh - 4rem);
+        }
+
+        /* Scrollbar styling */
+        .comparison-modal::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .comparison-modal::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .comparison-modal::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .comparison-modal::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100">
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+            <h1 class="text-2xl font-bold text-gray-800">Curify Admin Portal</h1>
+        </div>
+    </nav>
+
+    <div class="max-w-7xl mx-auto px-4 py-3">
+        <button id="compareButton" onclick="compareSelectedJobs()"
+            class="bg-blue-500 text-white px-4 py-2 rounded-md mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled>
+            Compare Selected Jobs (Select 2)
+        </button>
+
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">Translation Jobs</h2>
+        <div id="jobList" class="mb-8">
+            <!-- Filter Controls -->
+            <div class="bg-white p-4 mb-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label for="searchInput" class="block text-sm font-medium text-gray-700">Search</label>
+                        <input type="text" id="searchInput" placeholder="Search jobs..."
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            onkeyup="applyFilters()">
+                    </div>
+                    <div>
+                        <label for="statusFilter" class="block text-sm font-medium text-gray-700">Status</label>
+                        <select id="statusFilter"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            onchange="applyFilters()">
+                            <option value="">All Status</option>
+                            <option value="completed">Completed</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="languageFilter" class="block text-sm font-medium text-gray-700">Language</label>
+                        <select id="languageFilter"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            onchange="applyFilters()">
+                            <option value="">All Languages</option>
+                            <option value="es">Spanish</option>
+                            <option value="fr">French</option>
+                            <option value="de">German</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="sortBy" class="block text-sm font-medium text-gray-700">Sort By</label>
+                        <select id="sortBy"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                            onchange="applyFilters()">
+                            <option value="created_at">Created Date</option>
+                            <option value="status">Status</option>
+                            <option value="user">User</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <!-- Jobs Table -->
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div id="jobsTable" class="min-w-full">
+                    <div class="text-center py-8 text-gray-500">Loading jobs...</div>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">Analytics Dashboard</h2>
+        <div id="statsContainer"></div>
+    </div>
+
+    <!-- Job Detail Modal -->
+    <div id="jobDetailModal" class="modal">
+        <div class="flex items-center justify-center min-h-full">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-6xl">
+                <!-- Modal Header - Fixed at top -->
+                <div class="flex justify-between items-center p-6 border-b sticky top-0 bg-white">
+                    <h3 class="text-xl font-semibold">Job Details</h3>
+                    <button onclick="closeJobDetail()" class="text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Modal Content - Scrollable -->
+                <div id="jobDetailContent" class="modal-content">
+                    Loading job details...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Comparison Modal -->
+    <div id="comparisonModal" class="modal">
+        <div class="min-h-screen py-6 flex flex-col justify-center sm:py-12">
+            <div class="bg-white rounded-lg shadow-xl comparison-modal mx-auto">
+                <div class="p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold">Job Comparison</h2>
+                        <button onclick="closeComparisonModal()" class="text-gray-500 hover:text-gray-700">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="comparisonContent">
+                        <!-- Comparison content will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function () {
+            loadJobs();
+            loadStats();
+        });
+
+        const API_BASE_URL = 'http://localhost:8000';
+        let allJobs = []; // Store all jobs for filtering
+
+        async function loadJobs() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/jobs`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                allJobs = await response.json();
+                applyFilters();
+            } catch (error) {
+                console.error('Error loading jobs:', error);
+                document.getElementById('jobsTable').innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="text-red-500 mb-2">Error loading jobs: ${error.message}</div>
+                        <button onclick="loadJobs()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                            Retry
+                        </button>
+                    </div>`;
+            }
+        }
+
+        function applyFilters() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            const languageFilter = document.getElementById('languageFilter').value;
+            const sortBy = document.getElementById('sortBy').value;
+
+            let filteredJobs = allJobs.filter(job => {
+                const matchesSearch =
+                    job.job_id.toLowerCase().includes(searchTerm) ||
+                    job.user.toLowerCase().includes(searchTerm);
+                const matchesStatus = !statusFilter || job.status === statusFilter;
+                const matchesLanguage = !languageFilter || job.runtime_config.language === languageFilter;
+                return matchesSearch && matchesStatus && matchesLanguage;
+            });
+
+            // Sort jobs
+            filteredJobs.sort((a, b) => {
+                if (sortBy === 'created_at') {
+                    return new Date(b.created_at) - new Date(a.created_at);
+                }
+                return a[sortBy].localeCompare(b[sortBy]);
+            });
+
+            renderJobs(filteredJobs);
+        }
+
+        function renderJobs(jobs) {
+            const tableHTML = `
+                <table class="min-w-full">
+                    <thead>
+                        <tr>
+                            <th class="px-6 py-3 border-b">Compare</th>
+                            <th class="px-6 py-3 border-b">Job ID</th>
+                            <th class="px-6 py-3 border-b">User</th>
+                            <th class="px-6 py-3 border-b">Status</th>
+                            <th class="px-6 py-3 border-b">Language</th>
+                            <th class="px-6 py-3 border-b">Created At</th>
+                            <th class="px-6 py-3 border-b">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${jobs.map(job => `
+                            <tr>
+                                <td class="px-6 py-4 border-b">
+                                    <input type="checkbox" 
+                                           id="select-${job.job_id}" 
+                                           onchange="toggleJobSelection('${job.job_id}')"
+                                           class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                </td>
+                                <td class="px-6 py-4 border-b">${job.job_id}</td>
+                                <td class="px-6 py-4 border-b">${job.user}</td>
+                                <td class="px-6 py-4 border-b">
+                                    <span class="px-2 py-1 rounded ${getStatusClass(job.status)}">
+                                        ${job.status}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 border-b">${job.runtime_config.language}</td>
+                                <td class="px-6 py-4 border-b">
+                                    ${new Date(job.created_at).toLocaleString()}
+                                </td>
+                                <td class="px-6 py-4 border-b">
+                                    <button onclick="viewJob('${job.job_id}')" 
+                                            class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('jobsTable').innerHTML = tableHTML;
+        }
+
+        function getStatusClass(status) {
+            const classes = {
+                'completed': 'bg-green-100 text-green-800',
+                'in_progress': 'bg-yellow-100 text-yellow-800',
+                'failed': 'bg-red-100 text-red-800'
+            };
+            return classes[status] || 'bg-gray-100 text-gray-800';
+        }
+
+        let currentJobId = null;
+
+        async function viewJob(jobId) {
+            try {
+                const modal = document.getElementById('jobDetailModal');
+                const content = document.getElementById('jobDetailContent');
+                modal.classList.add('active');
+                currentJobId = jobId;
+
+                const response = await fetch(`${API_BASE_URL}/admin/job/${jobId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const job = await response.json();
+
+                content.innerHTML = `
+                    <div class="space-y-6 p-6">
+                        <!-- Job Info -->
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="p-4 bg-gray-50 rounded">
+                                <div class="text-sm text-gray-500">Job ID</div>
+                                <div class="font-medium">${job.job_id}</div>
+                            </div>
+                            <div class="p-4 bg-gray-50 rounded">
+                                <div class="text-sm text-gray-500">User</div>
+                                <div class="font-medium">${job.user}</div>
+                            </div>
+                            <div class="p-4 bg-gray-50 rounded">
+                                <div class="text-sm text-gray-500">Status</div>
+                                <div class="font-medium">${job.status}</div>
+                            </div>
+                        </div>
+
+                        <!-- Videos -->
+                        <div class="grid grid-cols-2 gap-6">
+                            <div class="space-y-2">
+                                <h4 class="font-medium">Original Video</h4>
+                                <video controls class="w-full">
+                                    <source src="${job.video_url}" type="video/mp4">
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                            <div class="space-y-2">
+                                <h4 class="font-medium">Translated Video</h4>
+                                ${job.translated_video_url ? `
+                                    <video controls class="w-full">
+                                        <source src="${job.translated_video_url}" type="video/mp4">
+                                        Your browser does not support the video tag.
+                                    </video>
+                                ` : '<div class="p-4 bg-gray-50 rounded">Translation in progress...</div>'}
+                            </div>
+                        </div>
+
+                        <!-- Transcripts -->
+                        <div class="grid grid-cols-2 gap-6">
+                            <div class="space-y-2">
+                                <h4 class="font-medium">Original Transcript</h4>
+                                <div class="p-4 bg-gray-50 rounded">
+                                    ${job.transcripts.original}
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <h4 class="font-medium">Translated Transcript</h4>
+                                <div class="p-4 bg-gray-50 rounded">
+                                    ${job.transcripts.translated || 'Translation in progress...'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Runtime Config -->
+                        <div class="space-y-2">
+                            <h4 class="font-medium">Runtime Configuration</h4>
+                            <div class="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded">
+                                <div>
+                                    <div class="text-sm text-gray-500">Language</div>
+                                    <div>${job.runtime_config.language}</div>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500">Speed</div>
+                                    <div>${job.runtime_config.speed}x</div>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500">Voice ID</div>
+                                    <div>${job.runtime_config.voice_id}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notes Section -->
+                        <div class="space-y-2">
+                            <h4 class="font-medium">Notes</h4>
+                            <div id="notesList" class="space-y-2">
+                                <!-- Notes will be loaded here -->
+                            </div>
+                            <div class="mt-4">
+                                <textarea 
+                                    id="noteInput" 
+                                    class="w-full px-3 py-2 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-blue-500" 
+                                    rows="2" 
+                                    placeholder="Add a note..."></textarea>
+                                <button 
+                                    onclick="addNote()" 
+                                    class="mt-2 bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                    Add Note
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Load notes for this job
+                loadNotes(jobId);
+            } catch (error) {
+                console.error('Error loading job details:', error);
+                content.innerHTML = `Error loading job details: ${error.message}`;
+            }
+        }
+
+        async function loadNotes(jobId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/job/${jobId}/notes`);
+                const notes = await response.json();
+
+                const notesList = document.getElementById('notesList');
+                notesList.innerHTML = notes.map(note => `
+                    <div class="p-3 bg-gray-50 rounded">
+                        <div class="text-sm text-gray-600">
+                            ${new Date(note.timestamp).toLocaleString()} - ${note.user}
+                        </div>
+                        <div>${note.content}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading notes:', error);
+            }
+        }
+
+        async function addNote() {
+            if (!currentJobId) return;
+
+            const noteInput = document.getElementById('noteInput');
+            const content = noteInput.value.trim();
+
+            if (!content) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/job/${currentJobId}/notes`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ content })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                noteInput.value = '';
+                await loadNotes(currentJobId);
+            } catch (error) {
+                console.error('Error adding note:', error);
+                // Show error to user
+                const notesList = document.getElementById('notesList');
+                notesList.innerHTML = `<div class="text-red-500">Error adding note: ${error.message}</div>` + notesList.innerHTML;
+            }
+        }
+
+        function closeJobDetail() {
+            const modal = document.getElementById('jobDetailModal');
+            modal.classList.remove('active');
+            currentJobId = null;
+        }
+
+        // Load jobs when page loads
+        document.addEventListener('DOMContentLoaded', loadJobs);
+
+        // Close modal when clicking outside
+        document.getElementById('jobDetailModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('jobDetailModal')) {
+                closeJobDetail();
+            }
+        });
+
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/admin/job-stats`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const stats = await response.json();
+
+                // Update stats display
+                document.getElementById('statsContainer').innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h3 class="text-gray-500 text-sm font-medium">Total Jobs</h3>
+                            <p class="text-3xl font-bold text-blue-600">${stats.total_jobs}</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h3 class="text-gray-500 text-sm font-medium">Success Rate</h3>
+                            <p class="text-3xl font-bold text-green-600">${stats.performance_metrics.success_rate}%</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h3 class="text-gray-500 text-sm font-medium">Completed Jobs</h3>
+                            <p class="text-3xl font-bold text-purple-600">${stats.performance_metrics.completed_jobs_count}</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h3 class="text-gray-500 text-sm font-medium">Avg. Processing Time</h3>
+                            <p class="text-3xl font-bold text-orange-600">${stats.performance_metrics.avg_processing_time}s</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h3 class="text-gray-500 text-sm font-medium mb-4">Status Distribution</h3>
+                            <canvas id="statusChart"></canvas>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow">
+                            <h3 class="text-gray-500 text-sm font-medium mb-4">Language Distribution</h3>
+                            <canvas id="languageChart"></canvas>
+                        </div>
+                    </div>`;
+
+                // Create status distribution chart
+                const statusCtx = document.getElementById('statusChart').getContext('2d');
+                new Chart(statusCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(stats.status_distribution),
+                        datasets: [{
+                            data: Object.values(stats.status_distribution),
+                            backgroundColor: [
+                                '#22c55e', // completed - green
+                                '#eab308', // in_progress - yellow
+                                '#ef4444'  // failed - red
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
+                    }
+                });
+
+                // Create language distribution chart
+                const languageCtx = document.getElementById('languageChart').getContext('2d');
+                new Chart(languageCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(stats.language_distribution),
+                        datasets: [{
+                            data: Object.values(stats.language_distribution),
+                            backgroundColor: [
+                                '#3b82f6', // es - blue
+                                '#8b5cf6', // fr - purple
+                                '#ec4899'  // de - pink
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                document.getElementById('statsContainer').innerHTML = `
+                    <div class="text-center py-8">
+                        <div class="text-red-500 mb-2">Error loading statistics: ${error.message}</div>
+                        <button onclick="loadStats()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                            Retry
+                        </button>
+                    </div>`;
+            }
+        }
+    </script>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/jobList.js"></script>
+    <script src="js/jobDetail.js"></script>
+    <script src="js/comparison.js"></script>
+    <script src="js/stats.js"></script>
+</body>
+
+</html>
